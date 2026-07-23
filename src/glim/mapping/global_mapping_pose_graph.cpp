@@ -35,11 +35,29 @@ using gtsam::symbol_shorthand::X;
 
 using Callbacks = GlobalMappingCallbacks;
 
+namespace {
+
+gtsam_points::FusedCovCacheMode parse_mahalanobis_cache_mode(const std::string& mode) {
+  if (mode == "FULL") {
+    return gtsam_points::FusedCovCacheMode::FULL;
+  } else if (mode == "COMPACT") {
+    return gtsam_points::FusedCovCacheMode::COMPACT;
+  } else if (mode == "NONE") {
+    return gtsam_points::FusedCovCacheMode::NONE;
+  }
+
+  spdlog::warn("unknown mahalanobis_cache_mode ({}), falling back to COMPACT", mode);
+  return gtsam_points::FusedCovCacheMode::COMPACT;
+}
+
+}  // namespace
+
 GlobalMappingPoseGraphParams::GlobalMappingPoseGraphParams() {
   Config config(GlobalConfig::get_config_path("config_global_mapping"));
 
   enable_optimization = config.param<bool>("global_mapping", "enable_optimization", true);
   registration_type = config.param<std::string>("global_mapping", "registration_type", "GICP");
+  mahalanobis_cache_mode = config.param<std::string>("global_mapping", "mahalanobis_cache_mode", "COMPACT");
 
   min_travel_dist = config.param<double>("global_mapping", "min_travel_dist", 100.0);
   max_neighbor_dist = config.param<double>("global_mapping", "max_neighbor_dist", 10.0);
@@ -392,6 +410,7 @@ void GlobalMappingPoseGraph::loop_detection_task() {
         auto factor =
           gtsam::make_shared<gtsam_points::IntegratedGICPFactor>(gtsam::Pose3(), 0, candidate.target->submap->frame, candidate.source->subsampled, candidate.target->tree);
         factor->set_max_correspondence_distance(params.gicp_max_correspondence_dist);
+        factor->set_fused_cov_cache_mode(parse_mahalanobis_cache_mode(params.mahalanobis_cache_mode));
 
         gtsam::NonlinearFactorGraph graph;
         graph.add(factor);
@@ -404,6 +423,7 @@ void GlobalMappingPoseGraph::loop_detection_task() {
         inlier_fraction = factor->inlier_fraction();
       } else if (params.registration_type == "VGICP") {
         auto factor = gtsam::make_shared<gtsam_points::IntegratedVGICPFactor>(gtsam::Pose3(), 0, candidate.target->voxels, candidate.source->subsampled);
+        factor->set_fused_cov_cache_mode(parse_mahalanobis_cache_mode(params.mahalanobis_cache_mode));
 
         gtsam::NonlinearFactorGraph graph;
         graph.add(factor);

@@ -47,6 +47,23 @@ using gtsam::symbol_shorthand::X;
 
 using Callbacks = GlobalMappingCallbacks;
 
+namespace {
+
+gtsam_points::FusedCovCacheMode parse_mahalanobis_cache_mode(const std::string& mode) {
+  if (mode == "FULL") {
+    return gtsam_points::FusedCovCacheMode::FULL;
+  } else if (mode == "COMPACT") {
+    return gtsam_points::FusedCovCacheMode::COMPACT;
+  } else if (mode == "NONE") {
+    return gtsam_points::FusedCovCacheMode::NONE;
+  }
+
+  spdlog::warn("unknown mahalanobis_cache_mode ({}), falling back to COMPACT", mode);
+  return gtsam_points::FusedCovCacheMode::COMPACT;
+}
+
+}  // namespace
+
 GlobalMappingParams::GlobalMappingParams() {
   Config config(GlobalConfig::get_config_path("config_global_mapping"));
 
@@ -56,6 +73,7 @@ GlobalMappingParams::GlobalMappingParams() {
   enable_between_factors = config.param<bool>("global_mapping", "create_between_factors", false);
   between_registration_type = config.param<std::string>("global_mapping", "between_registration_type", "GICP");
   registration_error_factor_type = config.param<std::string>("global_mapping", "registration_error_factor_type", "VGICP");
+  mahalanobis_cache_mode = config.param<std::string>("global_mapping", "mahalanobis_cache_mode", "COMPACT");
   submap_voxel_resolution = config.param<double>("global_mapping", "submap_voxel_resolution", 1.0);
   submap_voxel_resolution_max = config.param<double>("global_mapping", "submap_voxel_resolution_max", submap_voxel_resolution);
   submap_voxel_resolution_dmin = config.param<double>("global_mapping", "submap_voxel_resolution_dmin", 5.0);
@@ -338,7 +356,9 @@ void GlobalMapping::find_overlapping_submaps(double min_overlap) {
 #endif
       else {
         for (const auto& voxelmap : submaps[i]->voxelmaps) {
-          new_factors->emplace_shared<gtsam_points::IntegratedVGICPFactor>(X(i), X(j), voxelmap, subsampled_submaps[j]);
+          auto factor = gtsam::make_shared<gtsam_points::IntegratedVGICPFactor>(X(i), X(j), voxelmap, subsampled_submaps[j]);
+          factor->set_fused_cov_cache_mode(parse_mahalanobis_cache_mode(params.mahalanobis_cache_mode));
+          new_factors->add(factor);
         }
       }
     }
@@ -400,6 +420,7 @@ std::shared_ptr<gtsam::NonlinearFactorGraph> GlobalMapping::create_between_facto
   auto factor = gtsam::make_shared<gtsam_points::IntegratedGICPFactor>(X(0), X(1), submaps[last]->frame, submaps[current]->frame);
   factor->set_max_correspondence_distance(0.5);
   factor->set_num_threads(2);
+  factor->set_fused_cov_cache_mode(parse_mahalanobis_cache_mode(params.mahalanobis_cache_mode));
   graph.add(factor);
 
   logger->debug("--- LM optimization ---");
@@ -454,7 +475,9 @@ std::shared_ptr<gtsam::NonlinearFactorGraph> GlobalMapping::create_matching_cost
 
     if (params.registration_error_factor_type == "VGICP") {
       for (const auto& voxelmap : submaps[i]->voxelmaps) {
-        factors->emplace_shared<gtsam_points::IntegratedVGICPFactor>(X(i), X(current), voxelmap, subsampled_submaps[current]);
+        auto factor = gtsam::make_shared<gtsam_points::IntegratedVGICPFactor>(X(i), X(current), voxelmap, subsampled_submaps[current]);
+        factor->set_fused_cov_cache_mode(parse_mahalanobis_cache_mode(params.mahalanobis_cache_mode));
+        factors->add(factor);
       }
     }
 #ifdef GTSAM_POINTS_USE_CUDA
@@ -864,7 +887,9 @@ bool GlobalMapping::load(const std::string& path) {
 #endif
       } else {
         for (const auto& voxelmap : submaps[first]->voxelmaps) {
-          graph.emplace_shared<gtsam_points::IntegratedVGICPFactor>(X(first), X(second), voxelmap, subsampled_submaps[second]);
+          auto factor = gtsam::make_shared<gtsam_points::IntegratedVGICPFactor>(X(first), X(second), voxelmap, subsampled_submaps[second]);
+          factor->set_fused_cov_cache_mode(parse_mahalanobis_cache_mode(params.mahalanobis_cache_mode));
+          graph.add(factor);
         }
       }
     } else {

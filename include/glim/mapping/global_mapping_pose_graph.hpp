@@ -38,6 +38,7 @@ public:
   bool enable_optimization;
 
   std::string registration_type;
+  std::string mahalanobis_cache_mode;
 
   double min_travel_dist;
   double max_neighbor_dist;

@@ -36,6 +36,7 @@ public:
   std::string between_registration_type;
 
   std::string registration_error_factor_type;
+  std::string mahalanobis_cache_mode;
   double submap_voxel_resolution;
   double submap_voxel_resolution_max;
   double submap_voxel_resolution_dmin;
