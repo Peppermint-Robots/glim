@@ -35,6 +35,15 @@ public:
 
   void set_submaps(const std::vector<SubMap::ConstPtr>& target_submaps, const std::vector<SubMap::ConstPtr>& source_submaps);
 
+  // Session merge only: skip the "preprocess maps" popup (Indoor/Outdoor, Min
+  // distance, OK) and go straight to preprocessing with the Indoor preset.
+  void set_skip_preprocess_prompt(bool skip) { skip_preprocess_prompt = skip; }
+
+  // Hide the tuning widgets (global registration type, fpfh_radius, RANSAC/GNC
+  // params, 4dof, max_corr_dist, inf_scale) and run on Indoor values. The
+  // registration buttons stay. Safe to call every frame.
+  void set_simple_ui(bool simple);
+
   void clear();
 
   gtsam::NonlinearFactor::shared_ptr run();
@@ -54,6 +63,8 @@ private:
   const int num_threads;
 
   bool request_to_open;
+  bool skip_preprocess_prompt = false;
+  bool simple_ui = false;
   std::unique_ptr<guik::GLCanvas> canvas;
   std::unique_ptr<guik::ProgressModal> progress_modal;
   std::unique_ptr<guik::ModelControl> model_control;

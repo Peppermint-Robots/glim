@@ -53,6 +53,26 @@ protected:
 
   virtual void setup_ui() {}
 
+  // Extra controls appended to the Selection window, directly below the
+  // Optimize button. Subclasses override to add their own buttons there
+  // rather than opening a separate panel.
+  virtual void selection_ui_extra() {}
+
+  // Whether the Selection window shows Display settings, Min overlap, Find
+  // overlapping submaps, Recover graph and Optimize. OfflineViewer hides them.
+  virtual bool show_graph_controls() const { return true; }
+
+  // Whether the Logging panel is drawn. Checked every frame, not at
+  // registration, because the viewer thread starts inside the base constructor
+  // where a virtual would still resolve to the base class.
+  virtual bool show_log_panel() const { return true; }
+
+  // Whether Merge sessions skips its Indoor/Outdoor popup and uses Indoor.
+  virtual bool skip_session_merge_prompt() const { return false; }
+
+  // Whether the manual loop close window hides its tuning widgets.
+  virtual bool simple_loop_close_ui() const { return false; }
+
   void invoke(const std::function<void()>& task);
   void drawable_selection();
   void on_click();

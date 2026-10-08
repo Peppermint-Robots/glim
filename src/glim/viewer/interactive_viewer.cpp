@@ -126,7 +126,11 @@ void InteractiveViewer::viewer_loop() {
   viewer->register_ui_callback("on_click", [this] { on_click(); });
   viewer->register_ui_callback("context_menu", [this] { context_menu(); });
   viewer->register_ui_callback("run_modals", [this] { run_modals(); });
-  viewer->register_ui_callback("logging", guik::create_logger_ui(glim::get_ringbuffer_sink(), 0.5));
+  viewer->register_ui_callback("logging", [this, logger_ui = guik::create_logger_ui(glim::get_ringbuffer_sink(), 0.5)] {
+    if (show_log_panel()) {
+      logger_ui();
+    }
+  });
 
   viewer->register_drawable_filter("filter", [this](const std::string& name) {
     const auto starts_with = [](const std::string& name, const std::string& pattern) {
@@ -222,6 +226,7 @@ void InteractiveViewer::drawable_selection() {
 
   ImGui::Checkbox("Current scan", &draw_current);
 
+  if (show_graph_controls()) {
   if (ImGui::BeginMenu("Display settings")) {
     bool do_update_viewer = false;
 
@@ -270,7 +275,9 @@ void InteractiveViewer::drawable_selection() {
       update_viewer();
     }
   }
+  }
 
+  if (show_graph_controls()) {
   ImGui::Separator();
   ImGui::DragFloat("Min overlap", &min_overlap, 0.01f, 0.01f, 1.0f);
   show_note("Minimum overlap ratio for finding overlapping submaps.");
@@ -292,6 +299,7 @@ void InteractiveViewer::drawable_selection() {
   if (needs_session_merge) {
     ImGui::EndDisabled();
   }
+  }
 
   if (submaps.size() && needs_session_merge) {
     if (ImGui::Button("Merge sessions") || show_note("Merge the lastly loaded session with the previous session.")) {
@@ -308,6 +316,7 @@ void InteractiveViewer::drawable_selection() {
         const std::vector<SubMap::ConstPtr> source_submaps(source_begin, submaps.end());
 
         logger->info("|submaps|={} |targets|={} |sources|={} source_session_id={}", submaps.size(), target_submaps.size(), source_submaps.size(), source_session_id);
+        manual_loop_close_modal->set_skip_preprocess_prompt(skip_session_merge_prompt());
         manual_loop_close_modal->set_submaps(target_submaps, source_submaps);
       }
 
@@ -326,6 +335,7 @@ void InteractiveViewer::drawable_selection() {
     }
   }
 
+  if (show_graph_controls()) {
   if (needs_session_merge) {
     ImGui::BeginDisabled();
   }
@@ -346,6 +356,9 @@ void InteractiveViewer::drawable_selection() {
   if (needs_session_merge) {
     ImGui::EndDisabled();
   }
+  }
+
+  selection_ui_extra();
 
   ImGui::End();
 }
@@ -404,6 +417,7 @@ void InteractiveViewer::context_menu() {
 void InteractiveViewer::run_modals() {
   std::vector<gtsam::NonlinearFactor::shared_ptr> factors;
 
+  manual_loop_close_modal->set_simple_ui(simple_loop_close_ui());
   auto manual_loop_close_factor = manual_loop_close_modal->run();
   if (manual_loop_close_factor) {
     needs_session_merge = false;

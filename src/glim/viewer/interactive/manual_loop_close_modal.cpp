@@ -117,6 +117,17 @@ void ManualLoopCloseModal::set_submaps(const std::vector<SubMap::ConstPtr>& targ
   request_to_open = true;
 }
 
+void ManualLoopCloseModal::set_simple_ui(bool simple) {
+  if (simple && !simple_ui) {
+    // The widgets that would let the user pick these are hidden, so pin the
+    // Indoor values (same as the preprocess popup's Indoor button).
+    min_distance = 0.25f;
+    fpfh_radius = 2.5f;
+    max_correspondence_distance = 1.0f;
+  }
+  simple_ui = simple;
+}
+
 void ManualLoopCloseModal::clear() {
   target_key = -1;
   source_key = -1;
@@ -132,6 +143,8 @@ void ManualLoopCloseModal::clear() {
 
 gtsam::NonlinearFactor::shared_ptr ManualLoopCloseModal::run() {
   gtsam::NonlinearFactor::shared_ptr factor;
+
+  bool open_preprocess_modal = false;  // Request to open session preprocessing progress modal
 
   if (request_to_open && target && source) {
     // Setup for submap vs submap loop closure
@@ -151,11 +164,18 @@ gtsam::NonlinearFactor::shared_ptr ManualLoopCloseModal::run() {
   } else if (request_to_open && target_submaps.size() && source_submaps.size()) {
     // Setup for session vs session loop closure
     model_control->set_model_matrix(Eigen::Matrix4f::Identity().eval());
-    ImGui::OpenPopup("preprocess maps");
+    if (skip_preprocess_prompt) {
+      // Same values as the popup's Indoor button.
+      min_distance = 0.25f;
+      fpfh_radius = 2.5f;
+      max_correspondence_distance = 1.0f;
+      open_preprocess_modal = true;
+    } else {
+      ImGui::OpenPopup("preprocess maps");
+    }
   }
   request_to_open = false;
 
-  bool open_preprocess_modal = false;  // Request to open session preprocessing progress modal
   // Preprocess parameter setting modal
   if (ImGui::BeginPopupModal("preprocess maps", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::Text("Set default parameters:");
@@ -245,6 +265,7 @@ gtsam::NonlinearFactor::shared_ptr ManualLoopCloseModal::run() {
 
     /*** Global registration ***/
 
+    if (!simple_ui) {
     ImGui::Combo("Global registration type", &global_registration_type, "RANSAC\0GNC\0");
 
     if (ImGui::DragFloat("fpfh_radius", &fpfh_radius, 0.01f, 0.01f, 100.0f) || show_note("Neighbor search radius for FPFH extraction.\n~2.5m for indoors, ~5.0m for outdoors.")) {
@@ -266,6 +287,7 @@ gtsam::NonlinearFactor::shared_ptr ManualLoopCloseModal::run() {
         break;
     }
     ImGui::Checkbox("4dof", &global_registration_4dof) || show_note("Use 4DoF (XYZ + RZ) estimation instead of 6DoF (SE3).");
+    }  // !simple_ui
 
     bool open_align_global_modal = false;
     if (ImGui::Button("Run global registration")) {
@@ -275,8 +297,10 @@ gtsam::NonlinearFactor::shared_ptr ManualLoopCloseModal::run() {
     /*** Fine registration ***/
 
     ImGui::Separator();
-    ImGui::DragFloat("max_corr_dist", &max_correspondence_distance, 0.01f, 0.01f, 100.0f) || show_note("Maximum correspondence distance for scan matching.");
-    ImGui::DragFloat("inf_scale", &information_scale, 0.0f, 1.0f, 10000.0f) || show_note("Information scale for loop factor.");
+    if (!simple_ui) {
+      ImGui::DragFloat("max_corr_dist", &max_correspondence_distance, 0.01f, 0.01f, 100.0f) || show_note("Maximum correspondence distance for scan matching.");
+      ImGui::DragFloat("inf_scale", &information_scale, 0.0f, 1.0f, 10000.0f) || show_note("Information scale for loop factor.");
+    }
 
     bool open_align_modal = false;
     if (ImGui::Button("Run fine registration")) {
